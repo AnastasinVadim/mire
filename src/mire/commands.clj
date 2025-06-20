@@ -14,25 +14,51 @@
 (defn look
   "Get a description of the surrounding environs and its contents."
   []
-  (str (:desc @player/*current-room*)
-       "\nExits: " (keys @(:exits @player/*current-room*)) "\n"
-       (str/join "\n" (map #(str "There is " % " here.\n")
-                           @(:items @player/*current-room*)))))
+  (let [room @player/*current-room*
+        known-exits (get @player/*known-exits* (:name room))
+        ; Разыменовываем Ref с выходами
+        exits-map @(:exits room)
+        exits (keys exits-map)]
+    (str (:desc room)
+         "\nExits: "
+         (str/join ", " 
+                   (map (fn [dir]
+                          (if-let [target (get known-exits dir)]
+                            (str (name dir) " (to " (name target) ")")
+                            (name dir)))
+                        exits))
+         "\n"
+         (str/join "\n" (map #(str "There is " % " here.\n")
+                             @(:items room))))))
 
 (defn move
   "\"♬ We gotta get out of this place... ♪\" Give a direction."
   [direction]
   (dosync
-   (let [target-name ((:exits @player/*current-room*) (keyword direction))
+   (let [current-room-val @player/*current-room* ; Получаем значение текущей комнаты
+         dir-kw (keyword direction)
+         ; Получаем Ref с выходами и разыменовываем его
+         exits-map @(:exits current-room-val)
+         target-name (exits-map dir-kw)
          target (@rooms/rooms target-name)]
      (if target
        (do
+         ; Перемещаем игрока между комнатами
          (move-between-refs player/*name*
-                            (:inhabitants @player/*current-room*)
+                            (:inhabitants current-room-val)
                             (:inhabitants target))
          (ref-set player/*current-room* target)
+         ; Обновляем информацию о направлениях
+         (commute player/*known-exits*
+                  update (:name current-room-val) assoc dir-kw target-name)
+         ; Добавляем новую комнату в посещенные
+         (commute player/*visited-rooms* conj (:name target))
+         ; Инициализируем выходы для новой комнаты
+         (when (not (contains? @player/*known-exits* (:name target)))
+           (commute player/*known-exits* assoc (:name target) {}))
          (look))
        "You can't go that way."))))
+
 
 (defn grab
   "Pick something up."
