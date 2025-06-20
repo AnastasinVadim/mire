@@ -101,13 +101,21 @@
 (defn say
   "Say something out loud so everyone in the room can hear."
   [& words]
-  (let [message (str/join " " words)]
+  (let [message (str/join " " words)
+        ;; ANSI коды цветов
+        name-color "\u001b[1;33m"  ; желтый (жирный)
+        text-color "\u001b[1;37m"  ; белый (жирный)
+        reset-color "\u001b[0m"    ; сброс
+        formatted-msg (str name-color player/*name* ": " reset-color text-color message reset-color)]
+    
     (doseq [inhabitant (disj @(:inhabitants @player/*current-room*)
                              player/*name*)]
       (binding [*out* (player/streams inhabitant)]
-        (println message)
-        (println player/prompt)))
-    (str "You said " message)))
+        (println formatted-msg)
+        (print player/prompt)
+        (flush)))
+    
+    formatted-msg))
 
 (defn help
   "Show available commands and what they do."
